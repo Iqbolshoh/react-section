@@ -16,23 +16,37 @@ import {
   Palette,
   Layers,
   Code,
+  FileText,
+  Globe,
 } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
 import { useTheme } from '../contexts/ThemeContext';
 import SectionSelector from '../components/SectionSelector';
 import SectionRenderer from '../components/SectionRenderer';
 import ThemeCustomizer from '../components/ThemeCustomizer';
+import PageManager from '../components/PageManager';
 import { generateCompleteHTML } from '../utils/htmlExporter';
 import AddSectionButton from '../components/AddSectionButton';
+import { Page } from '../types';
 
 const Editor: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { projects, currentProject, setCurrentProject, reorderSections, createProject, isLoading } = useProject();
+  const { 
+    projects, 
+    currentProject, 
+    currentPage,
+    setCurrentProject, 
+    setCurrentPage,
+    reorderSections, 
+    createProject, 
+    isLoading 
+  } = useProject();
   const { currentTheme } = useTheme();
   const [showSectionSelector, setShowSectionSelector] = useState(false);
   const [insertPosition, setInsertPosition] = useState<{ index: number; position: 'above' | 'below' } | null>(null);
   const [showThemeCustomizer, setShowThemeCustomizer] = useState(false);
+  const [showPageManager, setShowPageManager] = useState(false);
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -43,22 +57,27 @@ const Editor: React.FC = () => {
       const project = projects.find(p => p.id === id);
       if (project) {
         setCurrentProject(project);
+        // Set the home page as default or first page
+        const homePage = project.pages.find(p => p.isHomePage) || project.pages[0];
+        if (homePage) {
+          setCurrentPage(homePage);
+        }
       } else {
         console.log('Project not found:', id);
       }
     }
-  }, [id, projects, setCurrentProject, navigate]);
+  }, [id, projects, setCurrentProject, setCurrentPage, navigate]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || !currentProject) return;
+    if (!over || !currentPage) return;
 
     const activeId = active.id;
     const overId = over.id;
 
     if (activeId !== overId) {
-      const sections = [...currentProject.sections];
+      const sections = [...currentPage.sections];
       const activeIndex = sections.findIndex(section => section.id === activeId);
       const overIndex = sections.findIndex(section => section.id === overId);
 
@@ -113,9 +132,9 @@ const Editor: React.FC = () => {
   };
 
   const moveSectionUp = (sectionId: string) => {
-    if (!currentProject) return;
+    if (!currentPage) return;
 
-    const sections = [...currentProject.sections].sort((a, b) => a.order - b.order);
+    const sections = [...currentPage.sections].sort((a, b) => a.order - b.order);
     const currentIndex = sections.findIndex(s => s.id === sectionId);
 
     if (currentIndex > 0) {
@@ -133,9 +152,9 @@ const Editor: React.FC = () => {
   };
 
   const moveSectionDown = (sectionId: string) => {
-    if (!currentProject) return;
+    if (!currentPage) return;
 
-    const sections = [...currentProject.sections].sort((a, b) => a.order - b.order);
+    const sections = [...currentPage.sections].sort((a, b) => a.order - b.order);
     const currentIndex = sections.findIndex(s => s.id === sectionId);
 
     if (currentIndex < sections.length - 1) {
@@ -150,6 +169,13 @@ const Editor: React.FC = () => {
 
       reorderSections(reorderedSections);
     }
+  };
+
+  const handlePageSelect = (page: Page) => {
+    setCurrentPage(page);
+    setSelectedSection(null);
+    setEditingSection(null);
+    setShowPageManager(false);
   };
 
   if (!currentProject) {
@@ -218,7 +244,9 @@ const Editor: React.FC = () => {
             </button>
             <div>
               <h1 className="text-lg font-bold text-gray-900 truncate max-w-32">{currentProject.name}</h1>
-              <p className="text-xs text-gray-500">{currentProject.sections.length} sections</p>
+              <p className="text-xs text-gray-500">
+                {currentPage?.name} • {currentPage?.sections.length || 0} sections
+              </p>
             </div>
           </div>
 
@@ -240,6 +268,17 @@ const Editor: React.FC = () => {
               className="mt-4 space-y-4"
             >
               <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    setShowPageManager(true);
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:opacity-90 transition-all text-sm font-semibold shadow-md"
+                >
+                  <FileText className="w-4 h-4" />
+                  Pages
+                </button>
+
                 <button
                   onClick={() => handleAddSection()}
                   className="flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:opacity-90 transition-all text-sm font-semibold shadow-md"
@@ -266,22 +305,22 @@ const Editor: React.FC = () => {
                   <Eye className="w-4 h-4" />
                   Preview
                 </button>
-
-                <button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all disabled:opacity-50 text-sm font-semibold shadow-md"
-                >
-                  {isSaving ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : editingSection ? (
-                    <Check className="w-4 h-4" />
-                  ) : (
-                    <Save className="w-4 h-4" />
-                  )}
-                  {isSaving ? 'Saving...' : editingSection ? 'Done' : 'Save'}
-                </button>
               </div>
+
+              <button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all disabled:opacity-50 text-sm font-semibold shadow-md"
+              >
+                {isSaving ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : editingSection ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                {isSaving ? 'Saving...' : editingSection ? 'Done' : 'Save'}
+              </button>
 
               <button
                 onClick={handleExport}
@@ -316,13 +355,21 @@ const Editor: React.FC = () => {
               <div>
                 <h1 className="text-2xl font-bold text-secondary-900 font-heading">{currentProject.name}</h1>
                 <p className="text-sm text-secondary-500 font-primary">
-                  {currentProject.sections.length} sections • Last saved {new Date().toLocaleTimeString()}
+                  {currentPage?.name} • {currentPage?.sections.length || 0} sections • Last saved {new Date().toLocaleTimeString()}
                 </p>
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowPageManager(true)}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:opacity-90 transition-all font-semibold shadow-lg font-heading"
+            >
+              <FileText className="w-4 h-4" />
+              Pages ({currentProject.pages.length})
+            </button>
+
             <button
               onClick={() => handleAddSection()}
               className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:opacity-90 transition-all font-semibold shadow-lg font-heading"
@@ -377,13 +424,44 @@ const Editor: React.FC = () => {
       <div className="flex-1 flex">
         {/* Canvas */}
         <div className="flex-1 overflow-auto">
+          {/* Current Page Indicator */}
+          {currentPage && (
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border-b border-gray-200 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    {currentPage.isHomePage ? (
+                      <Globe className="w-4 h-4 text-white" />
+                    ) : (
+                      <FileText className="w-4 h-4 text-white" />
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 font-heading">
+                      Editing: {currentPage.name}
+                    </h2>
+                    <p className="text-sm text-gray-600 font-primary">
+                      /{currentProject.websiteUrl}/{currentPage.slug}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPageManager(true)}
+                  className="px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium border border-gray-200"
+                >
+                  Switch Page
+                </button>
+              </div>
+            </div>
+          )}
+
           <DndContext onDragEnd={handleDragEnd}>
             <SortableContext
-              items={currentProject.sections.map(s => s.id)}
+              items={currentPage?.sections.map(s => s.id) || []}
               strategy={verticalListSortingStrategy}
             >
               <div className="min-h-full" style={{ fontFamily: currentTheme?.fonts?.primary }}>
-                {currentProject.sections.length === 0 ? (
+                {!currentPage || currentPage.sections.length === 0 ? (
                   <div className="h-full flex items-center justify-center p-8">
                     <div className="text-center max-w-lg">
                       <div className="relative mb-8">
@@ -395,10 +473,10 @@ const Editor: React.FC = () => {
                         </div>
                       </div>
                       <h3 className="text-3xl font-bold text-secondary-900 mb-4 font-heading">
-                        Ready to Build Something Amazing?
+                        Ready to Build {currentPage?.name || 'Your Page'}?
                       </h3>
                       <p className="text-secondary-600 mb-8 text-lg leading-relaxed font-primary">
-                        Start by adding your first section. Choose from headers, heroes, content blocks, and more to create your perfect website.
+                        Start by adding your first section to this page. Choose from headers, heroes, content blocks, and more.
                       </p>
                       <button
                         onClick={() => handleAddSection()}
@@ -410,7 +488,7 @@ const Editor: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  currentProject.sections
+                  currentPage.sections
                     .sort((a, b) => a.order - b.order)
                     .map((section, index) => (
                       <React.Fragment key={section.id}>
@@ -437,7 +515,7 @@ const Editor: React.FC = () => {
                           onAddAbove={() => handleAddSection({ index, position: 'above' })}
                           onAddBelow={() => handleAddSection({ index, position: 'below' })}
                           canMoveUp={index > 0}
-                          canMoveDown={index < currentProject.sections.length - 1}
+                          canMoveDown={index < currentPage.sections.length - 1}
                           onMoveUp={() => moveSectionUp(section.id)}
                           onMoveDown={() => moveSectionDown(section.id)}
                         />
@@ -472,6 +550,32 @@ const Editor: React.FC = () => {
         <ThemeCustomizer
           onClose={() => setShowThemeCustomizer(false)}
         />
+      )}
+
+      {showPageManager && (
+        <AnimatePresence>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex"
+            onClick={() => setShowPageManager(false)}
+          >
+            <motion.div
+              initial={{ x: -400 }}
+              animate={{ x: 0 }}
+              exit={{ x: -400 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="bg-white h-full shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <PageManager
+                onPageSelect={handlePageSelect}
+                selectedPageId={currentPage?.id}
+              />
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
       )}
     </div>
   );

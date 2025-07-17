@@ -55,16 +55,31 @@ export interface SectionInstance {
   updatedAt: Date;
 }
 
+// New Page interface
+export interface Page {
+  id: string;
+  name: string;
+  slug: string; // URL slug like 'about', 'services', 'contact'
+  title: string; // Page title for SEO
+  description?: string; // Meta description for SEO
+  sections: SectionInstance[];
+  isHomePage: boolean;
+  isPublished: boolean;
+  order: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Project {
   id: string;
   name: string;
   description?: string;
-  websiteUrl: string; // New field for custom website URL
-  category: string; // Website category (business, personal, etc.)
-  seoKeywords: string[]; // SEO keywords array
-  logo?: string; // Logo URL
-  favicon?: string; // Favicon URL
-  sections: SectionInstance[];
+  websiteUrl: string;
+  category: string;
+  seoKeywords: string[];
+  logo?: string;
+  favicon?: string;
+  pages: Page[]; // Changed from sections to pages
   themeId: string;
   createdAt: Date;
   updatedAt: Date;

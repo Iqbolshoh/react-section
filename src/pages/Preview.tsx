@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Edit3,
   Share2,
   Globe,
   Eye,
-  Layout
+  Layout,
+  FileText,
+  ChevronDown,
+  Home as HomeIcon,
 } from 'lucide-react';
 import { useProject } from '../contexts/ProjectContext';
 import { useTheme } from '../contexts/ThemeContext';
 import SectionRenderer from '../components/SectionRenderer';
+import { Page } from '../types';
 
 const Preview: React.FC = () => {
   const { id } = useParams();
@@ -19,17 +23,24 @@ const Preview: React.FC = () => {
   const { projects, currentProject, setCurrentProject } = useProject();
   const { currentTheme } = useTheme();
   const [showHeader, setShowHeader] = useState(true);
+  const [currentPage, setCurrentPage] = useState<Page | null>(null);
+  const [showPageSelector, setShowPageSelector] = useState(false);
 
   useEffect(() => {
     if (id) {
       const project = projects.find(p => p.id === id);
       if (project) {
         setCurrentProject(project);
+        // Set the home page as default
+        const homePage = project.pages.find(p => p.isHomePage) || project.pages[0];
+        if (homePage) {
+          setCurrentPage(homePage);
+        }
       } else {
         console.log('Project not found for preview:', id);
       }
     }
-  }, [id, projects, setCurrentProject, navigate]);
+  }, [id, projects, setCurrentProject]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -41,7 +52,7 @@ const Preview: React.FC = () => {
   }, []);
 
   const handlePublish = () => {
-    alert(`🎉 Your website has been published!\n\nYou can access it at: ${currentProject?.name.toLowerCase().replace(/\s+/g, '-')}.templates.uz`);
+    alert(`🎉 Your website has been published!\n\nYou can access it at: ${currentProject?.websiteUrl}.templates.uz`);
   };
 
   const handleShare = () => {
@@ -55,6 +66,13 @@ const Preview: React.FC = () => {
       navigator.clipboard.writeText(window.location.href);
       alert('Link copied to clipboard!');
     }
+  };
+
+  const handlePageChange = (page: Page) => {
+    setCurrentPage(page);
+    setShowPageSelector(false);
+    // Scroll to top when changing pages
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (!currentProject) {
@@ -127,6 +145,60 @@ const Preview: React.FC = () => {
                 <p className="text-sm text-secondary-600 font-primary">Live Preview Mode</p>
               </div>
             </div>
+
+            {/* Page Selector */}
+            {currentProject.pages.length > 1 && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowPageSelector(!showPageSelector)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  <div className="flex items-center gap-2">
+                    {currentPage?.isHomePage ? (
+                      <HomeIcon className="w-4 h-4" />
+                    ) : (
+                      <FileText className="w-4 h-4" />
+                    )}
+                    <span>{currentPage?.name || 'Select Page'}</span>
+                  </div>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+
+                <AnimatePresence>
+                  {showPageSelector && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                      className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50"
+                    >
+                      {currentProject.pages
+                        .filter(page => page.isPublished)
+                        .sort((a, b) => a.order - b.order)
+                        .map((page) => (
+                          <button
+                            key={page.id}
+                            onClick={() => handlePageChange(page)}
+                            className={`w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 transition-colors ${
+                              currentPage?.id === page.id ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                            }`}
+                          >
+                            {page.isHomePage ? (
+                              <HomeIcon className="w-4 h-4" />
+                            ) : (
+                              <FileText className="w-4 h-4" />
+                            )}
+                            <div>
+                              <div className="font-medium">{page.name}</div>
+                              <div className="text-xs text-gray-500">/{page.slug}</div>
+                            </div>
+                          </button>
+                        ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -159,7 +231,7 @@ const Preview: React.FC = () => {
 
       {/* Website Content */}
       <div className="pt-20">
-        {currentProject.sections.length === 0 ? (
+        {!currentPage || currentPage.sections.length === 0 ? (
           <div className="min-h-screen flex items-center justify-center bg-gray-50">
             <div className="text-center max-w-lg">
               <div className="relative mb-8">
@@ -171,10 +243,13 @@ const Preview: React.FC = () => {
                 </div>
               </div>
               <h2 className="text-3xl font-bold text-secondary-900 mb-4 font-heading">
-                Your website is empty
+                {currentPage ? `${currentPage.name} page is empty` : 'No page selected'}
               </h2>
               <p className="text-secondary-600 mb-8 text-lg font-primary">
-                Add some sections to see your website come to life
+                {currentPage 
+                  ? 'Add some sections to see this page come to life'
+                  : 'Select a page to preview or add some content'
+                }
               </p>
               <button
                 onClick={() => navigate(`/editor/${currentProject.id}`)}
@@ -185,7 +260,7 @@ const Preview: React.FC = () => {
             </div>
           </div>
         ) : (
-          currentProject.sections
+          currentPage.sections
             .sort((a, b) => a.order - b.order)
             .map((section) => (
               <SectionRenderer
@@ -210,9 +285,19 @@ const Preview: React.FC = () => {
           className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-2xl px-6 py-3 text-white flex items-center gap-3 shadow-lg"
         >
           <div className="w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
-          <span className="font-medium font-primary">Preview Mode Active</span>
+          <span className="font-medium font-primary">
+            Preview: {currentPage?.name || 'No Page'}
+          </span>
         </motion.div>
       </div>
+
+      {/* Click outside handler for page selector */}
+      {showPageSelector && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowPageSelector(false)}
+        />
+      )}
     </div>
   );
 };
